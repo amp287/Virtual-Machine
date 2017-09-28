@@ -9,9 +9,10 @@ CPU cpu;
 int instruction_count;
 int ar_count;
 
-int registers[16];
+int registers[MAX_REGISTERS];
 int stack[MAX_STACK_HEIGHT];
 int activation_records[MAX_LEXI_LEVELS];
+
 char *output_buffer;
 
 void get_instructions(FILE *fp);
@@ -45,7 +46,11 @@ int main(int argc, char *argv[]) {
 	
 	print_instructions();
 
+	printf("Instruction    \t\tPC\tBP\tSP\tRegisters\t\tStack\n");
+
 	while (!halt) {
+		//print current line to be executed
+		printf("%d", cpu.pc);
 		fetch();
 		halt = execute();
 		print_info();
@@ -90,6 +95,8 @@ void get_instructions(FILE *fp) {
 void print_instructions() {
 	int i;
 
+	printf("Instructions:\n");
+	
 	for (i = 0; i < instruction_count; i++) {
 		char op[4];
 		int r, l, m;
@@ -100,6 +107,7 @@ void print_instructions() {
 		m = instructions[i].m;
 		printf("%d %s %d %d %d\n", i, op, r, l, m);
 	}
+	printf("\n");
 }
 
 //Updates the cpus instruction register and increments the program counter by 1
@@ -126,6 +134,7 @@ int execute() {
 			cpu.sp = cpu.bp - 1;
 			cpu.bp = stack[cpu.sp + 3];
 			cpu.pc = stack[cpu.sp + 4];
+			ar_count--;
 			break;
 		case LOD:
 			registers[cpu.ir.r] = stack[base(cpu.ir.l, cpu.bp) + cpu.ir.m];
@@ -134,15 +143,14 @@ int execute() {
 			stack[base(cpu.ir.l, cpu.bp) + cpu.ir.m] = registers[cpu.ir.r];
 			break;
 		case CAL:
-			activation_records[ar_count] = cpu.sp;
-			ar_count++;
 			stack[cpu.sp + 1] = 0;						//Space for rtn val
 			stack[cpu.sp + 2] = base(cpu.ir.l, cpu.bp); //Static Link
 			stack[cpu.sp + 3] = cpu.bp;					//Dynamic Link
 			stack[cpu.sp + 4] = cpu.pc;					//Return Address
 			cpu.bp = cpu.sp + 1;
+			activation_records[ar_count] = cpu.bp;
+			ar_count++;
 			cpu.pc = cpu.ir.m;
-			//cpu.sp = cpu.sp + 4;
 			break;
 		case INC:
 			cpu.sp += cpu.ir.m;
@@ -209,13 +217,20 @@ int execute() {
 void print_info() {
 	int i, ar_printed = 0;
 
-	printf("%d	%s %d %d %d\t", cpu.pc, opcodes[cpu.ir.op], cpu.ir.r, cpu.ir.l, cpu.ir.m);
-	printf("\t%d\t%d\t%d\t", cpu.pc, cpu.bp, cpu.sp);
+	printf("	%s %d %d %d\t", opcodes[cpu.ir.op], cpu.ir.r, cpu.ir.l, cpu.ir.m);
+	printf("%d\t%d\t%d\t", cpu.pc, cpu.bp, cpu.sp);
 
-	for (i = 0; i < cpu.sp; i++) {
-		printf("%d ", stack[i]);
-		if (ar_printed < ar_count && i == activation_records[ar_printed])
+	for (i = 0; i < MAX_REGISTERS; i++) {
+		printf("%d ", registers[i]);
+	}
+	printf("\t");
+	for (i = 1; i <= cpu.sp; i++) {
+		if (ar_printed < ar_count && i == activation_records[ar_printed]) {
 			printf("|");
+			ar_printed++;
+		}
+			
+		printf("%d ", stack[i]);
 	}
 	printf("\n");
 }

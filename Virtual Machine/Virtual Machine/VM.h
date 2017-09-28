@@ -4,6 +4,7 @@
 #define MAX_LEXI_LEVELS 3
 #define NUM_OP_CODES 23
 #define MAX_OUTPUT_BUFFER_LENGTH 500
+#define MAX_REGISTERS 8
 
 static char *opcodes[] = {
 	"ERROR",
