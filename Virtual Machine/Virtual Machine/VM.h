@@ -3,8 +3,7 @@
 #define MAX_CODE_LENGTH 500
 #define MAX_LEXI_LEVELS 3
 #define NUM_OP_CODES 23
-
-int get_instructions(FILE *fp);
+#define MAX_OUTPUT_BUFFER_LENGTH 500
 
 static char *opcodes[] = {
 	"ERROR",

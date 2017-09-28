@@ -1,23 +1,31 @@
 #include "VM.h"
 #include <ctype.h>
 #include <string.h>
+#include <stdlib.h>
 
 INSTRUCTION instructions[MAX_CODE_LENGTH];
-int instruction_count;
-
 CPU cpu;
 
+int instruction_count;
+int ar_count;
+
 int registers[16];
-
 int stack[MAX_STACK_HEIGHT];
+int activation_records[MAX_LEXI_LEVELS];
+char *output_buffer;
 
-int init();
+void get_instructions(FILE *fp);
+void init();
 int fetch();
 int execute();
 void print_instructions();
+void print_info();
+void print_output();
+int base(int l, int base);
 
 int main(int argc, char *argv[]) {
 	FILE *fp;
+	int halt = 0;
 
 	if (argc == 0) {
 		printf("Error no file provided!");
@@ -31,33 +39,43 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	if (get_instructions(fp) != 0) {
-		getchar();
-		return -1;
-	}
-	
 	init();
 
+	get_instructions(fp);
+	
 	print_instructions();
+
+	while (!halt) {
+		fetch();
+		halt = execute();
+		print_info();
+	}
+
+	print_output();
 
 	getchar();
 }
 
-int init() {
+void init() {
 	cpu.bp = 1;
 	cpu.pc = 0;
 	cpu.sp = 0;
 	cpu.ir = instructions[0];
 
+	ar_count = 0;
+	instruction_count = 0;
+
 	memset(registers, 0, sizeof(int) * 16);
 	memset(stack, 0, sizeof(int) * MAX_STACK_HEIGHT);
+	memset(activation_records, 0, sizeof(int) * MAX_LEXI_LEVELS);
 
+	output_buffer = calloc(MAX_OUTPUT_BUFFER_LENGTH, sizeof(char));
 }
 
-int get_instructions(FILE *fp) {
+//Reads the file given and loads the code to be run as well as the
+//number of lines
+void get_instructions(FILE *fp) {
 	int op, r, l, m;
-
-	instruction_count = 0;
 
 	while (fscanf(fp,"%d %d %d %d", &op, &r, &l, &m) != EOF){
 		instructions[instruction_count].op = op;
@@ -66,10 +84,9 @@ int get_instructions(FILE *fp) {
 		instructions[instruction_count].m = m;
 		instruction_count++;
 	}
-
-	return 0;
 }
 
+//Prints the assembly read in by the virtual machine
 void print_instructions() {
 	int i;
 
@@ -85,6 +102,9 @@ void print_instructions() {
 	}
 }
 
+//Updates the cpus instruction register and increments the program counter by 1
+//return -1 if the pre-fetch program counter is greater than the lines of code read in 
+//0 otherwise
 int fetch() {
 	if (cpu.pc < instruction_count) {
 		cpu.ir = instructions[cpu.pc];
@@ -95,8 +115,9 @@ int fetch() {
 	return 0;
 }
 
+//Executes the instruction in the cpus instruction register
+//Returns 1 on halt 0 otherwise
 int execute() {
-	
 	switch (cpu.ir.op) {
 		case LIT:
 			registers[cpu.ir.r] = cpu.ir.m;
@@ -113,12 +134,15 @@ int execute() {
 			stack[base(cpu.ir.l, cpu.bp) + cpu.ir.m] = registers[cpu.ir.r];
 			break;
 		case CAL:
+			activation_records[ar_count] = cpu.sp;
+			ar_count++;
 			stack[cpu.sp + 1] = 0;						//Space for rtn val
 			stack[cpu.sp + 2] = base(cpu.ir.l, cpu.bp); //Static Link
 			stack[cpu.sp + 3] = cpu.bp;					//Dynamic Link
 			stack[cpu.sp + 4] = cpu.pc;					//Return Address
 			cpu.bp = cpu.sp + 1;
 			cpu.pc = cpu.ir.m;
+			//cpu.sp = cpu.sp + 4;
 			break;
 		case INC:
 			cpu.sp += cpu.ir.m;
@@ -132,14 +156,82 @@ int execute() {
 			break;
 		case SIO:
 			if (cpu.ir.m == 1)
-				printf("%d", registers[cpu.ir.r]);
+				sprintf(output_buffer, "%d\n", registers[cpu.ir.r]);
 			else if (cpu.ir.m == 2)
 				scanf("%d", &registers[cpu.ir.r]);
 			else if (cpu.ir.m == 3)
 				return 1; //halt
 			break;
 		case NEG:
-
+			registers[cpu.ir.r] = -1 * registers[cpu.ir.l];
+			break;
+		case ADD:
+			registers[cpu.ir.r] = registers[cpu.ir.l] + registers[cpu.ir.m];
+			break;
+		case SUB:
+			registers[cpu.ir.r] = registers[cpu.ir.l] - registers[cpu.ir.m];
+			break;
+		case MUL:
+			registers[cpu.ir.r] = registers[cpu.ir.l] * registers[cpu.ir.m];
+			break;
+		case DIV:
+			registers[cpu.ir.r] = registers[cpu.ir.l] / registers[cpu.ir.m];
+			break;
+		case ODD:
+			registers[cpu.ir.r] = registers[cpu.ir.r] % 2;
+			break;
+		case MOD:
+			registers[cpu.ir.r] = registers[cpu.ir.l] % registers[cpu.ir.m];
+			break;
+		case EQL:
+			registers[cpu.ir.r] = registers[cpu.ir.l] == registers[cpu.ir.m];
+			break;
+		case NEQ:
+			registers[cpu.ir.r] = registers[cpu.ir.l] != registers[cpu.ir.m];
+			break;
+		case LSS:
+			registers[cpu.ir.r] = registers[cpu.ir.l] < registers[cpu.ir.m];
+			break;
+		case LEQ:
+			registers[cpu.ir.r] = registers[cpu.ir.l] <= registers[cpu.ir.m];
+			break;
+		case GTR:
+			registers[cpu.ir.r] = registers[cpu.ir.l] > registers[cpu.ir.m];
+			break;
+		case GEQ:
+			registers[cpu.ir.r] = registers[cpu.ir.l] >= registers[cpu.ir.m];
+			break;
 	}
 
+	return 0;
+}
+
+void print_info() {
+	int i, ar_printed = 0;
+
+	printf("%d	%s %d %d %d\t", cpu.pc, opcodes[cpu.ir.op], cpu.ir.r, cpu.ir.l, cpu.ir.m);
+	printf("\t%d\t%d\t%d\t", cpu.pc, cpu.bp, cpu.sp);
+
+	for (i = 0; i < cpu.sp; i++) {
+		printf("%d ", stack[i]);
+		if (ar_printed < ar_count && i == activation_records[ar_printed])
+			printf("|");
+	}
+	printf("\n");
+}
+
+void print_output() {
+	printf("Program Output: %s", output_buffer);
+}
+
+//Moves down the static chain l times
+//Returns the base pointer of the AR at the lexicographical level: l
+int base(int l, int base) {
+	int b1;
+	b1 = base;
+	while (l > 0) {
+		b1 = stack[b1 + 1];
+		l--;
+	}
+	return b1;
 }
