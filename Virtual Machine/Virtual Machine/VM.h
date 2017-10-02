@@ -1,3 +1,6 @@
+//Austin Peace
+//Sebastian De La Cruz
+
 #include <stdio.h>
 #define MAX_STACK_HEIGHT 2000
 #define MAX_CODE_LENGTH 500

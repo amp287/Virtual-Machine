@@ -1,3 +1,6 @@
+//Austin Peace
+//Sebastian De La Cruz
+
 #include "VM.h"
 #include <ctype.h>
 #include <string.h>
@@ -30,13 +33,11 @@ int main(int argc, char *argv[]) {
 
 	if (argc == 0) {
 		printf("Error no file provided!");
-		getchar();
 		return -1;
 	}
 
 	if ((fp = fopen(argv[1], "r")) == NULL) {
 		printf("Error file does not exist!");
-		getchar();
 		return -1;
 	}
 
@@ -58,7 +59,7 @@ int main(int argc, char *argv[]) {
 
 	print_output();
 
-	getchar();
+	return 0;
 }
 
 void init() {
